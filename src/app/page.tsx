@@ -161,12 +161,14 @@ export default function Home() {
                   // (including any setState inside it) in React's implicit form-action
                   // transition, so a setLoading(true) called there doesn't paint until
                   // the whole action settles — the button just looks frozen for the
-                  // several seconds classification takes. Setting it here, from a plain
-                  // synchronous click handler, paints immediately. reportValidity()
-                  // keeps the native "required" check working — without it, clicking
-                  // with an empty textarea would show a stuck spinner with no submit
-                  // event ever firing to clear it.
-                  if (e.currentTarget.form?.reportValidity()) setLoading(true)
+                  // several seconds classification takes. Setting it from this plain
+                  // synchronous click handler paints immediately instead — but doing it
+                  // truly synchronously disables this same submit button (disabled={loading})
+                  // before the browser has dispatched the click's default action (the
+                  // native form submission), which cancels that submission outright.
+                  // Deferring one macrotask lets the submission fire first.
+                  if (!e.currentTarget.form?.reportValidity()) return
+                  setTimeout(() => setLoading(true), 0)
                 }}
                 aria-label={loading ? 'Finding your model...' : 'Find my model'}
                 className="w-full rounded-lg bg-navy px-4 py-3 font-display text-sm font-semibold text-cream transition-colors hover:bg-navy-light disabled:opacity-50"
