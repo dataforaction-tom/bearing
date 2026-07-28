@@ -22,6 +22,84 @@ import { join } from 'path'
 const MIGRATIONS_DIR = join(process.cwd(), 'src', 'db', 'migrations')
 const dryRun = process.argv.includes('--dry-run')
 
+/**
+ * Split a migration file into individual statements. The Neon HTTP driver
+ * refuses multi-command queries ("cannot insert multiple commands into a
+ * prepared statement"), so we split on top-level semicolons — ignoring those
+ * inside dollar-quoted blocks ($$...$$, $tag$...$tag$), single-quoted
+ * strings, and comments.
+ *
+ * A migration file is recorded as applied only after every statement
+ * succeeds; since statements don't share a transaction over HTTP, keep
+ * individual statements idempotent (IF EXISTS / IF NOT EXISTS) so a
+ * partially applied file can simply be re-run.
+ */
+function splitStatements(ddl: string): string[] {
+  const statements: string[] = []
+  let current = ''
+  let i = 0
+  let dollarTag: string | null = null
+
+  while (i < ddl.length) {
+    const rest = ddl.slice(i)
+
+    if (dollarTag) {
+      const end = rest.indexOf(dollarTag)
+      const consumed = end === -1 ? rest.length : end + dollarTag.length
+      current += rest.slice(0, consumed)
+      i += consumed
+      dollarTag = null
+      continue
+    }
+
+    if (rest.startsWith('--')) {
+      const nl = rest.indexOf('\n')
+      const consumed = nl === -1 ? rest.length : nl + 1
+      current += rest.slice(0, consumed)
+      i += consumed
+      continue
+    }
+
+    if (rest.startsWith('/*')) {
+      const end = rest.indexOf('*/')
+      const consumed = end === -1 ? rest.length : end + 2
+      current += rest.slice(0, consumed)
+      i += consumed
+      continue
+    }
+
+    if (rest[0] === "'") {
+      // single-quoted string; '' is an escaped quote
+      const match = rest.match(/^'(?:[^']|'')*'/)
+      const consumed = match ? match[0].length : rest.length
+      current += rest.slice(0, consumed)
+      i += consumed
+      continue
+    }
+
+    const dollar = rest.match(/^\$[A-Za-z_]*\$/)
+    if (dollar) {
+      dollarTag = dollar[0]
+      current += dollar[0]
+      i += dollar[0].length
+      continue
+    }
+
+    if (rest[0] === ';') {
+      if (current.trim()) statements.push(current.trim())
+      current = ''
+      i += 1
+      continue
+    }
+
+    current += rest[0]
+    i += 1
+  }
+
+  if (current.trim()) statements.push(current.trim())
+  return statements
+}
+
 async function main() {
   const url = process.env.NEON_DATABASE_URL
   if (!url) throw new Error('NEON_DATABASE_URL is not set in .env.local')
@@ -60,12 +138,12 @@ async function main() {
   for (const filename of pending) {
     const path = join(MIGRATIONS_DIR, filename)
     const ddl = readFileSync(path, 'utf-8')
-    process.stdout.write(`Applying ${filename}... `)
+    const statements = splitStatements(ddl)
+    process.stdout.write(`Applying ${filename} (${statements.length} statement${statements.length === 1 ? '' : 's'})... `)
     try {
-      // neon-serverless executes a single statement per call; for multi-statement
-      // migrations we'd need to split. Today our migrations are single-statement;
-      // if that changes, switch to a transactional client.
-      await sql.query(ddl)
+      for (const statement of statements) {
+        await sql.query(statement)
+      }
       await sql`INSERT INTO schema_migrations (filename) VALUES (${filename})`
       console.log('ok')
     } catch (err) {
