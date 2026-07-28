@@ -1,10 +1,54 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { runTrio, runChallenger, checkAuth, requestMagicLink, submitRoutedPreference } from '@/app/actions'
+import {
+  routeAndRun,
+  runTrio,
+  runChallenger,
+  checkAuth,
+  requestMagicLink,
+  submitRoutedPreference,
+} from '@/app/actions'
+import type { Factor } from '@/lib/registry'
 import { LoadingIndicator } from '@/components/loading-indicator'
 
-type Mode = 'trio' | 'challenger'
+// Single entry point for every "actually run my prompt" action (route to the
+// top model, Trio, Challenger). Previously these lived in two components —
+// RunPanel inline in the top card, TrioPanel after all ~30 model cards — which
+// meant Trio/Challenger were effectively invisible below the fold. Folding
+// them into one tabbed surface attached to the top card fixes discoverability
+// without duplicating the prompt/file/sign-in plumbing three times.
+
+type Mode = 'route' | 'trio' | 'challenger'
+
+const FACTOR_LABELS: Record<Factor, string> = {
+  cost: 'cost',
+  speed: 'speed',
+  quality: 'quality',
+  privacy: 'privacy',
+  sustainability: 'sustainability',
+  transparency: 'transparency',
+  capability: 'capability',
+}
+
+/** Highest-scoring factor for the routed model — the headline "why". */
+function topFactor(factorScores: Record<string, number>): string {
+  const entries = Object.entries(factorScores)
+  if (entries.length === 0) return 'overall fit'
+  const [factor] = entries.reduce((best, cur) => (cur[1] > best[1] ? cur : best))
+  return FACTOR_LABELS[factor as Factor] ?? factor
+}
+
+interface RouteResult {
+  modelName: string
+  provider: string
+  factorScores: Record<string, number>
+  response?: string
+  error?: string
+  estCost: number
+  estCo2g: number | null
+  latencyMs: number
+}
 
 interface TrioCandidate {
   slug: string
@@ -24,13 +68,32 @@ interface TrioResult {
   verdict: { winnerSlug: string; winnerName: string; reason: string; judgeModel: string } | null
 }
 
-export function TrioPanel({ taskId }: { taskId: string }) {
+const MODE_LABEL: Record<Mode, string> = {
+  route: 'Run top model',
+  trio: 'Trio',
+  challenger: 'Challenger',
+}
+
+const MODE_DESCRIPTION: Record<Mode, string> = {
+  route: 'Bearing routes to the highest-ranked model it can actually run for your task and priorities, and runs it for you.',
+  trio: 'Bearing sends your prompt to the top 3 ranked models, then a blind judge picks the best answer without knowing which model wrote which.',
+  challenger: 'Bearing routes to the top model, then has the #2 model critique and improve its answer. A blind judge picks the stronger result.',
+}
+
+const MODE_PLACEHOLDER: Record<Mode, string> = {
+  route: 'Enter the prompt you actually want to run...',
+  trio: 'Enter the prompt to send to all three models...',
+  challenger: 'Enter the prompt to route and challenge...',
+}
+
+export function RunSurface({ taskId }: { taskId: string }) {
   const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState<Mode>('trio')
+  const [mode, setMode] = useState<Mode>('route')
   const [prompt, setPrompt] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
-  const [result, setResult] = useState<TrioResult | null>(null)
+  const [routeResult, setRouteResult] = useState<RouteResult | null>(null)
+  const [trioResult, setTrioResult] = useState<TrioResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -40,11 +103,20 @@ export function TrioPanel({ taskId }: { taskId: string }) {
 
   const [preferred, setPreferred] = useState<string | null>(null)
 
+  function switchMode(next: Mode) {
+    if (next === mode) return
+    setMode(next)
+    setRouteResult(null)
+    setTrioResult(null)
+    setError(null)
+    setPreferred(null)
+  }
+
   function handlePreference(slug: string) {
-    if (!result || preferred) return
+    if (!trioResult || preferred) return
     setPreferred(slug)
     startTransition(async () => {
-      await submitRoutedPreference(result.routedRunId, slug, null)
+      await submitRoutedPreference(trioResult.routedRunId, slug, null)
     })
   }
 
@@ -60,14 +132,24 @@ export function TrioPanel({ taskId }: { taskId: string }) {
       const formData = new FormData()
       formData.set('prompt', prompt.trim())
       if (file) formData.set('file', file)
-      const res = mode === 'trio'
-        ? await runTrio(taskId, formData)
-        : await runChallenger(taskId, formData)
-      if ('error' in res && res.error && !('candidates' in res)) {
-        setError(res.error)
-        return
+
+      if (mode === 'route') {
+        const res = await routeAndRun(taskId, formData)
+        if ('error' in res && res.error && !('modelName' in res)) {
+          setError(res.error)
+          return
+        }
+        setRouteResult(res as RouteResult)
+      } else {
+        const res = mode === 'trio'
+          ? await runTrio(taskId, formData)
+          : await runChallenger(taskId, formData)
+        if ('error' in res && res.error && !('candidates' in res)) {
+          setError(res.error)
+          return
+        }
+        setTrioResult(res as TrioResult)
       }
-      setResult(res as TrioResult)
     })
   }
 
@@ -81,29 +163,24 @@ export function TrioPanel({ taskId }: { taskId: string }) {
     })
   }
 
-  function switchMode(next: Mode) {
-    if (next === mode) return
-    setMode(next)
-    setResult(null)
-    setError(null)
-    setPreferred(null)
-  }
-
   if (!open) {
     return (
-      <div className="mt-8 text-center">
-        <button type="button" onClick={() => setOpen(true)} className="btn-secondary">
-          Run the top models and let a judge pick
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-teal px-4 py-2 text-sm font-medium font-display text-teal transition-colors hover:bg-teal hover:text-cream"
+      >
+        Run this prompt
+      </button>
     )
   }
 
+  const hasResult = mode === 'route' ? routeResult !== null : trioResult !== null
+
   return (
-    <div className="mt-8 rounded-xl border border-cream-dark bg-white p-5 fade-in">
-      {/* Mode toggle: Trio (top 3) vs Challenger (top model, reviewed by #2). */}
-      <div className="mb-4 inline-flex rounded-lg border border-cream-dark p-0.5">
-        {(['trio', 'challenger'] as Mode[]).map((m) => (
+    <div className="mt-4 w-full rounded-lg border border-teal/30 bg-teal/5 p-4 fade-in">
+      <div className="mb-3 inline-flex rounded-lg border border-cream-dark bg-white p-0.5">
+        {(['route', 'trio', 'challenger'] as Mode[]).map((m) => (
           <button
             key={m}
             type="button"
@@ -112,35 +189,36 @@ export function TrioPanel({ taskId }: { taskId: string }) {
               mode === m ? 'bg-navy text-cream' : 'text-navy/60 hover:text-navy'
             }`}
           >
-            {m === 'trio' ? 'Trio' : 'Challenger'}
+            {MODE_LABEL[m]}
           </button>
         ))}
       </div>
 
-      <h3 className="font-display text-lg font-bold text-navy">
-        {mode === 'trio' ? 'Trio mode' : 'Challenger mode'}
-      </h3>
-      <p className="mt-1 mb-3 text-sm text-grey-blue">
-        {mode === 'trio'
-          ? 'Bearing sends your prompt to the top 3 ranked models, then a blind judge picks the best answer without knowing which model wrote which.'
-          : 'Bearing routes to the top model, then has the #2 model critique and improve its answer. A blind judge picks the stronger result.'}
+      <p className="mb-2 font-display text-sm font-semibold text-navy">
+        {mode === 'route' ? 'Run your prompt' : MODE_LABEL[mode] + ' mode'}
       </p>
+      <p className="mb-3 text-xs text-grey-blue">{MODE_DESCRIPTION[mode]}</p>
 
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         rows={4}
         disabled={isPending}
-        placeholder={mode === 'trio' ? 'Enter the prompt to send to all three models...' : 'Enter the prompt to route and challenge...'}
+        placeholder={MODE_PLACEHOLDER[mode]}
         className="w-full rounded-lg border border-cream-dark bg-white p-3 text-sm text-navy resize-y focus:border-teal focus:ring-1 focus:ring-teal focus:outline-none"
       />
 
+      {/* Optional file attachment (PDF/CSV), same constraints as /compare. */}
       <div className="mt-3">
         {file ? (
-          <div className="flex items-center gap-2 rounded-lg border border-teal/30 bg-teal/5 px-3 py-2 text-xs">
+          <div className="flex items-center gap-2 rounded-lg border border-teal/30 bg-white px-3 py-2 text-xs">
             <span className="text-navy">{file.name}</span>
             <span className="text-navy/50">({(file.size / 1024).toFixed(0)} KB)</span>
-            <button type="button" onClick={() => { setFile(null); setFileError(null) }} className="ml-auto text-coral/70 hover:text-coral">
+            <button
+              type="button"
+              onClick={() => { setFile(null); setFileError(null) }}
+              className="ml-auto text-coral/70 hover:text-coral"
+            >
               Remove
             </button>
           </div>
@@ -169,8 +247,9 @@ export function TrioPanel({ taskId }: { taskId: string }) {
 
       {error && <p role="alert" className="mt-3 text-sm text-coral">{error}</p>}
 
+      {/* Inline sign-in */}
       {showSignIn && (
-        <div className="mt-3 rounded-lg border border-teal/30 bg-teal/5 p-3">
+        <div className="mt-3 rounded-lg border border-teal/30 bg-white p-3">
           {emailSent ? (
             <p className="text-sm text-teal">Check your email for a sign-in link, then come back and run.</p>
           ) : (
@@ -199,30 +278,52 @@ export function TrioPanel({ taskId }: { taskId: string }) {
           className="mt-3 rounded-lg bg-navy px-4 py-2 text-sm font-semibold font-display text-cream transition-colors hover:bg-navy-light disabled:opacity-40"
         >
           {isPending
-            ? (mode === 'trio' ? 'Running all three...' : 'Routing and challenging...')
-            : (mode === 'trio' ? 'Run Trio' : 'Run Challenger')}
+            ? (mode === 'route' ? 'Running...' : mode === 'trio' ? 'Running all three...' : 'Routing and challenging...')
+            : (mode === 'route' ? 'Route & run' : mode === 'trio' ? 'Run Trio' : 'Run Challenger')}
         </button>
       )}
 
-      {isPending && !result && (
-        <div className="mt-4"><LoadingIndicator size="sm" label="Running and judging..." /></div>
+      {isPending && !hasResult && (
+        <div className="mt-4"><LoadingIndicator size="sm" label="Routing and running..." /></div>
       )}
 
-      {result && (
+      {mode === 'route' && routeResult && (
+        <div className="mt-4 fade-in">
+          <div className="mb-2 inline-flex flex-wrap items-center gap-2 rounded-full bg-navy/5 px-3 py-1 text-xs text-navy/70">
+            <span>
+              Routed to <strong className="text-navy">{routeResult.modelName}</strong> — ranked #1 among runnable models on your priorities
+              {' '}(strongest on {topFactor(routeResult.factorScores)})
+            </span>
+          </div>
+          <p className="mb-3 font-mono text-xs text-grey-blue">
+            {routeResult.estCo2g != null ? `~${routeResult.estCo2g.toFixed(2)} gCO₂e · ` : ''}
+            ~${routeResult.estCost.toFixed(4)}/task · {(routeResult.latencyMs / 1000).toFixed(1)}s
+          </p>
+          {routeResult.error ? (
+            <p className="text-sm text-coral">{routeResult.error}</p>
+          ) : (
+            <div className="whitespace-pre-wrap rounded-lg border border-cream-dark bg-white p-4 text-sm text-navy">
+              {routeResult.response}
+            </div>
+          )}
+        </div>
+      )}
+
+      {mode !== 'route' && trioResult && (
         <div className="mt-5 fade-in">
-          {result.verdict && (
+          {trioResult.verdict && (
             <div className="mb-4 rounded-lg border border-coral/30 bg-coral/5 p-4">
               <p className="font-display text-sm font-semibold text-navy">
-                Judge&apos;s pick: {result.verdict.winnerName}
+                Judge&apos;s pick: {trioResult.verdict.winnerName}
               </p>
-              <p className="mt-1 text-sm text-navy/70 italic">{result.verdict.reason}</p>
-              <p className="mt-1 text-xs text-grey-blue">Judged blind by {result.verdict.judgeModel}</p>
+              <p className="mt-1 text-sm text-navy/70 italic">{trioResult.verdict.reason}</p>
+              <p className="mt-1 text-xs text-grey-blue">Judged blind by {trioResult.verdict.judgeModel}</p>
             </div>
           )}
 
-          <div className={`grid gap-3 ${result.candidates.length <= 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
-            {result.candidates.map((c) => {
-              const isWinner = result.verdict?.winnerSlug === c.slug
+          <div className={`grid gap-3 ${trioResult.candidates.length <= 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+            {trioResult.candidates.map((c) => {
+              const isWinner = trioResult.verdict?.winnerSlug === c.slug
               const roleLabel = c.role === 'primary' ? 'Top pick' : c.role === 'challenger' ? 'Challenger' : `#${c.routeRank}`
               return (
                 <div
@@ -256,7 +357,7 @@ export function TrioPanel({ taskId }: { taskId: string }) {
                 <strong>
                   {preferred === 'tie'
                     ? 'a tie'
-                    : result.candidates.find((c) => c.slug === preferred)?.name ?? preferred}
+                    : trioResult.candidates.find((c) => c.slug === preferred)?.name ?? preferred}
                 </strong>
                 . This feeds Bearing&apos;s open preference dataset.
               </p>
@@ -264,7 +365,7 @@ export function TrioPanel({ taskId }: { taskId: string }) {
               <>
                 <p className="mb-2 font-display text-sm font-semibold text-navy">Which answer did you prefer?</p>
                 <div className="flex flex-wrap gap-2">
-                  {result.candidates.filter((c) => !c.error && c.response?.trim()).map((c) => (
+                  {trioResult.candidates.filter((c) => !c.error && c.response?.trim()).map((c) => (
                     <button
                       key={c.slug}
                       type="button"
