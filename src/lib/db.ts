@@ -458,12 +458,25 @@ export async function updateModelPricing(slug: string, pricing: { input_per_1m: 
   `
 }
 
-/** Get all openrouter_id values from the models table. */
+/** Get all openrouter_id values from the models table, keyed by openrouter_id
+ *  (value is our slug) — used to detect OpenRouter models already imported. */
 export async function getOpenRouterIds(): Promise<Map<string, string>> {
   const rows = await getDb()`SELECT slug, openrouter_id FROM models WHERE openrouter_id IS NOT NULL`
   const map = new Map<string, string>()
   for (const row of rows) {
     map.set(row.openrouter_id as string, row.slug as string)
+  }
+  return map
+}
+
+/** Get all openrouter_id values from the models table, keyed by our slug —
+ *  the shape auto-routing needs to resolve "does this slug have an
+ *  openrouter_id, and what is it" without one query per model. */
+export async function getOpenRouterIdsBySlug(): Promise<Map<string, string>> {
+  const rows = await getDb()`SELECT slug, openrouter_id FROM models WHERE openrouter_id IS NOT NULL`
+  const map = new Map<string, string>()
+  for (const row of rows) {
+    map.set(row.slug as string, row.openrouter_id as string)
   }
   return map
 }

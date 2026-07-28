@@ -195,12 +195,12 @@ export const DIRECT_PROVIDERS: Record<string, DirectProvider> = {
     apiKeyEnv: 'GREENPT_API_KEY',
     name: 'GreenPT',
   },
-  'mistral-ocr': {
-    baseUrl: 'https://api.mistral.ai/v1',
-    modelId: 'pixtral-large-latest',
-    apiKeyEnv: 'MISTRAL_API_KEY',
-    name: 'Mistral',
-  },
+  // mistral-ocr (Pixtral Large) intentionally omitted: its old chat-completions
+  // id (pixtral-large-latest) has been retired by Mistral, and the current
+  // mistral-ocr-* model family rejects /v1/chat/completions entirely — OCR
+  // models are document-extraction-only via Mistral's dedicated /v1/ocr
+  // endpoint, which this app has no caller for. Verified directly against
+  // Mistral's API: both the old and current model ids 400 on chat completions.
 }
 
 // ---------------------------------------------------------------------------
