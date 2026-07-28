@@ -156,6 +156,18 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={loading}
+                onClick={(e) => {
+                  // Passing an async function to <form action> wraps its execution
+                  // (including any setState inside it) in React's implicit form-action
+                  // transition, so a setLoading(true) called there doesn't paint until
+                  // the whole action settles — the button just looks frozen for the
+                  // several seconds classification takes. Setting it here, from a plain
+                  // synchronous click handler, paints immediately. reportValidity()
+                  // keeps the native "required" check working — without it, clicking
+                  // with an empty textarea would show a stuck spinner with no submit
+                  // event ever firing to clear it.
+                  if (e.currentTarget.form?.reportValidity()) setLoading(true)
+                }}
                 aria-label={loading ? 'Finding your model...' : 'Find my model'}
                 className="w-full rounded-lg bg-navy px-4 py-3 font-display text-sm font-semibold text-cream transition-colors hover:bg-navy-light disabled:opacity-50"
               >
