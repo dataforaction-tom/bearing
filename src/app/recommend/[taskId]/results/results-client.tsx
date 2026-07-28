@@ -8,8 +8,7 @@ import type { PipelineResult } from '@/lib/pipeline'
 import type { LocalInferenceResult } from '@/lib/local-inference'
 import { PipelineSection } from './pipeline-section'
 import { LocalSection } from './local-section'
-import { RunPanel } from './run-panel'
-import { TrioPanel } from './trio-panel'
+import { RunSurface } from './run-surface'
 
 const FACTOR_LABELS: Record<Factor, string> = {
   cost: 'Cost',
@@ -39,11 +38,18 @@ interface ResultsClientProps {
   local?: LocalInferenceResult | null
 }
 
+/** Model cards shown before the "Show all" expander. */
+const VISIBLE_MODEL_COUNT = 5
+
 export function ResultsClient({ taskId, models, reasoning, pipeline, local }: ResultsClientProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
   const [selectionId, setSelectionId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [showAllModels, setShowAllModels] = useState(false)
+
+  const visibleModels = showAllModels ? models : models.slice(0, VISIBLE_MODEL_COUNT)
+  const hiddenCount = models.length - visibleModels.length
 
   function handleSelect(modelSlug: string, rank: number) {
     setError(null)
@@ -64,7 +70,7 @@ export function ResultsClient({ taskId, models, reasoning, pipeline, local }: Re
         <p role="alert" className="text-sm text-coral">{error}</p>
       )}
 
-      {models.map((model, index) => {
+      {visibleModels.map((model, index) => {
         const rank = index + 1
         const isTop = rank === 1
         const isSelected = selectedSlug === model.slug
@@ -166,15 +172,39 @@ export function ResultsClient({ taskId, models, reasoning, pipeline, local }: Re
               </button>
             </div>
 
-            {/* Auto-route: run the user's real prompt on the top-ranked model. */}
+            {/* Auto-route: run the user's real prompt (top model, Trio, or Challenger). */}
             {isTop && (
               <div className="mt-4 ml-9">
-                <RunPanel taskId={taskId} topModelName={model.name} />
+                <RunSurface taskId={taskId} />
               </div>
             )}
           </div>
         )
       })}
+
+      {hiddenCount > 0 && (
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={() => setShowAllModels(true)}
+            className="btn-secondary"
+          >
+            Show all {models.length} models
+          </button>
+        </div>
+      )}
+
+      {showAllModels && models.length > VISIBLE_MODEL_COUNT && (
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={() => setShowAllModels(false)}
+            className="text-sm text-navy/60 underline hover:text-navy"
+          >
+            Show fewer
+          </button>
+        </div>
+      )}
 
       {pipeline && (
         <PipelineSection
@@ -186,8 +216,6 @@ export function ResultsClient({ taskId, models, reasoning, pipeline, local }: Re
       {local && (
         <LocalSection local={local} />
       )}
-
-      <TrioPanel taskId={taskId} />
 
       {selectionId && (
         <div className="mt-8 rounded-lg border border-teal/30 bg-teal/5 p-6 text-center">
