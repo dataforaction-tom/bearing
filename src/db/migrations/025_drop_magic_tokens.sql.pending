@@ -1,0 +1,12 @@
+-- 025: Drop the old magic-link token table.
+--
+-- Deliberately NOT a live migration yet (note the .sql.pending extension —
+-- scripts/run-migrations.ts only picks up files ending in .sql, so this is
+-- inert on purpose). Apply manually, days after the NextAuth/password-auth
+-- migration ships, once the new email+password flow is confirmed stable in
+-- production: rename this file to strip the ".pending" suffix, then run
+-- `npx tsx scripts/run-migrations.ts`. Keeping the drop decoupled from the
+-- main auth migration means a rollback of that migration doesn't also
+-- require restoring dropped data.
+
+DROP TABLE IF EXISTS magic_tokens;

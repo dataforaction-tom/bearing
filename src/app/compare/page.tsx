@@ -7,9 +7,10 @@ import {
   createDirectCompareTask,
   startComparison,
   runComparison,
-  requestMagicLink,
+  signInWithPassword,
 } from '@/app/actions'
 import { LoadingIndicator } from '@/components/loading-indicator'
+import { CredentialsForm } from '@/components/credentials-form'
 
 interface CompareModel {
   slug: string
@@ -19,8 +20,6 @@ interface CompareModel {
   capabilities: string[]
   contextWindow: number
 }
-
-const STORAGE_KEY = 'direct-compare-state'
 
 function ComparisonProgress() {
   const [elapsed, setElapsed] = useState(0)
@@ -64,8 +63,6 @@ export default function DirectComparePage() {
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [showSignIn, setShowSignIn] = useState(false)
-  const [email, setEmail] = useState('')
-  const [emailSent, setEmailSent] = useState(false)
 
   const loadedRef = useRef(false)
   const [isPending, startTransition] = useTransition()
@@ -83,17 +80,6 @@ export default function DirectComparePage() {
       setIsAuthenticated(authResult.authenticated)
       if ('models' in modelsResult && modelsResult.models) {
         setModels(modelsResult.models)
-      }
-
-      // Restore state from localStorage (after auth redirect — may be a new tab)
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        try {
-          const state = JSON.parse(saved)
-          if (state.selected) setSelected(state.selected)
-          if (state.prompt) setPrompt(state.prompt)
-          localStorage.removeItem(STORAGE_KEY)
-        } catch { /* ignore corrupt data */ }
       }
     })
   }, [startTransition])
@@ -128,19 +114,10 @@ export default function DirectComparePage() {
       )
     : models
 
-  function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
-    // Save state before auth redirect — localStorage so it survives if magic link opens in a new tab
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ selected, prompt }))
-    startTransition(async () => {
-      const result = await requestMagicLink(email.trim(), '/compare')
-      if (result.error) {
-        setError(result.error)
-      } else {
-        setEmailSent(true)
-      }
-    })
+  function handleSignedIn() {
+    setIsAuthenticated(true)
+    setShowSignIn(false)
+    runComparisonFlow()
   }
 
   function handleCompare() {
@@ -151,6 +128,14 @@ export default function DirectComparePage() {
       return
     }
 
+    runComparisonFlow()
+  }
+
+  // Split from handleCompare so handleSignedIn can run this directly right
+  // after sign-in — calling handleCompare() there would re-check the
+  // `isAuthenticated` from this render's closure, which is still stale
+  // (false) since setIsAuthenticated(true) hasn't re-rendered yet.
+  function runComparisonFlow() {
     setError(null)
     startTransition(async () => {
       // Create a lightweight task record for the FK
@@ -390,38 +375,16 @@ export default function DirectComparePage() {
         {/* Inline sign-in */}
         {showSignIn && !isAuthenticated && (
           <div className="mb-6 rounded-lg border border-teal/30 bg-teal/5 p-6">
-            {emailSent ? (
-              <div>
-                <p className="font-display font-semibold text-teal">Check your email</p>
-                <p className="mt-1 text-sm text-navy/70">
-                  We sent a sign-in link. After clicking it, you&apos;ll return here with your selections preserved.
-                </p>
-              </div>
-            ) : (
-              <>
-                <p className="font-display font-semibold text-navy mb-1">Sign in to compare</p>
-                <p className="text-sm text-navy/60 mb-4">
-                  Quick sign-in with a magic link — no password needed. Your model selections will be preserved.
-                </p>
-                <form onSubmit={handleSignIn} className="flex gap-2">
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="flex-1 rounded-md border border-cream-dark bg-cream px-3 py-2 text-sm text-navy placeholder:text-navy/40 focus:border-teal focus:ring-2 focus:ring-teal/30 focus:outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isPending}
-                    className="btn-primary text-sm disabled:opacity-50"
-                  >
-                    {isPending ? 'Sending...' : 'Send link'}
-                  </button>
-                </form>
-              </>
-            )}
+            <p className="font-display font-semibold text-navy mb-1">Sign in to compare</p>
+            <p className="text-sm text-navy/60 mb-4">
+              Your model selections and prompt are preserved — sign in and it&apos;ll run immediately.
+            </p>
+            <CredentialsForm
+              onSubmit={signInWithPassword}
+              onSuccess={handleSignedIn}
+              submitLabel="Sign in & compare"
+              pendingLabel="Signing in..."
+            />
           </div>
         )}
 

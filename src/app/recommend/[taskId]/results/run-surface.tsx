@@ -6,11 +6,12 @@ import {
   runTrio,
   runChallenger,
   checkAuth,
-  requestMagicLink,
+  signInWithPassword,
   submitRoutedPreference,
 } from '@/app/actions'
 import type { Factor } from '@/lib/registry'
 import { LoadingIndicator } from '@/components/loading-indicator'
+import { CredentialsForm } from '@/components/credentials-form'
 
 // Single entry point for every "actually run my prompt" action (route to the
 // top model, Trio, Challenger). Previously these lived in two components —
@@ -98,8 +99,6 @@ export function RunSurface({ taskId }: { taskId: string }) {
   const [isPending, startTransition] = useTransition()
 
   const [showSignIn, setShowSignIn] = useState(false)
-  const [email, setEmail] = useState('')
-  const [emailSent, setEmailSent] = useState(false)
 
   const [preferred, setPreferred] = useState<string | null>(null)
 
@@ -153,14 +152,9 @@ export function RunSurface({ taskId }: { taskId: string }) {
     })
   }
 
-  function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
-    startTransition(async () => {
-      const res = await requestMagicLink(email.trim(), `/recommend/${taskId}/results`)
-      if (res.error) setError(res.error)
-      else setEmailSent(true)
-    })
+  function handleSignedIn() {
+    setShowSignIn(false)
+    handleRun()
   }
 
   if (!open) {
@@ -250,23 +244,13 @@ export function RunSurface({ taskId }: { taskId: string }) {
       {/* Inline sign-in */}
       {showSignIn && (
         <div className="mt-3 rounded-lg border border-teal/30 bg-white p-3">
-          {emailSent ? (
-            <p className="text-sm text-teal">Check your email for a sign-in link, then come back and run.</p>
-          ) : (
-            <form onSubmit={handleSignIn} className="flex gap-2">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="flex-1 rounded-md border border-cream-dark bg-cream px-3 py-2 text-sm text-navy focus:border-teal focus:outline-none"
-              />
-              <button type="submit" disabled={isPending} className="btn-primary text-sm disabled:opacity-50">
-                {isPending ? 'Sending...' : 'Sign in'}
-              </button>
-            </form>
-          )}
+          <p className="mb-2 text-sm font-medium text-navy">Sign in to run this</p>
+          <CredentialsForm
+            onSubmit={signInWithPassword}
+            onSuccess={handleSignedIn}
+            submitLabel="Sign in & run"
+            pendingLabel="Signing in..."
+          />
         </div>
       )}
 
