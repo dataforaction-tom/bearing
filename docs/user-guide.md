@@ -57,20 +57,32 @@ Tap **Use this one** on the model you want to try. This records your choice (ano
 
 After selecting, you'll see a link to give feedback later — bookmark it if you want to come back after trying the model.
 
-### Step 6: Run it (auto-routing)
+### Step 6: Run it
 
-You don't have to leave Bearing to try the recommendation. On the top-ranked model, tap **Run this prompt**, enter the prompt you actually want to run (and optionally attach a PDF or CSV), and Bearing routes to the #1 model for your task and priorities and runs it for you.
+You don't have to leave Bearing to try a recommendation — and you're not limited to the top pick. **Every model card in your results has its own "Run this prompt" action.** Tap it on whichever model you want to try, enter the prompt you actually want to run (and optionally attach a PDF or CSV), and Bearing runs it for you.
 
-You'll see the answer along with a short explanation of why that model was chosen (which factor it scored strongest on) and a footprint readout: estimated grams of CO₂e, cost per task, and how long the response took. Running requires a quick sign-in, and there's a small daily allowance.
+You'll see the answer along with a short explanation of why that model scored well for you (which factor it was strongest on) and a footprint readout: estimated grams of CO₂e, cost per task, and how long the response took. Running requires a quick sign-in, and there's a small daily allowance.
 
 ### Trio and Challenger modes
 
-Below the results you can run a head-to-head **without picking the models yourself**:
+Next to **Run this prompt** on every model card, you'll find **Trio** and **Challenger** tabs — a head-to-head comparison anchored on that specific model, so you don't have to pick the models yourself:
 
-- **Trio** sends your prompt to the **top 3** ranked models at once. A blind judge — a separate model that is shown the three answers under anonymous labels, so it can't tell which model wrote which — picks the best one and explains why.
-- **Challenger** routes to the top model, then asks the #2 model to critique and improve that answer. The blind judge then picks the stronger of the two.
+- **Trio** sends your prompt to that model plus the next two runnable models by rank. A blind judge — a separate model that is shown the three answers under anonymous labels, so it can't tell which model wrote which — picks the best one and explains why.
+- **Challenger** uses that model as the primary answer, then asks the next-ranked model to critique and improve it. The blind judge then picks the stronger of the two.
+
+Open Trio or Challenger from whichever card you're curious about — the top recommendation, or any other model in your list — and Bearing anchors the comparison there instead of always defaulting to the overall top ranking.
 
 After the answers come back, you're asked **which answer you preferred**. Your pick and the judge's verdict both feed Bearing's open dataset — they're the highest-value signal Bearing collects about which models actually win on real tasks. As everywhere in Bearing, only hashes of your prompt and the responses are stored, never the text.
+
+## Signing in
+
+Viewing recommendations, browsing the registry, and validating a model never require signing in. **Running a prompt, Trio, Challenger, or a head-to-head comparison** do — each with a small daily allowance to manage costs.
+
+Bearing uses a regular email and password, not a magic link. If you don't have an account yet, follow **Create an account** from the sign-in page — it only asks for an email and a password (at least 8 characters), and you're signed in immediately.
+
+If you signed up before this or have forgotten your password, use the **Forgot your password, or never set one?** link on the sign-in page. Enter your email and, if it matches an account, you'll get an email with a link to set a new password — you're signed back in automatically as soon as you do.
+
+Once signed in, the navigation bar shows your email address and a **Sign out** button, so you can always see your status and end your session from anywhere in Bearing.
 
 ## Validating your current model
 
@@ -134,8 +146,8 @@ For tasks where specs alone don't tell the full story — creative writing, nuan
 
 ### Requirements
 
-- You need to **sign in** with your email (magic link, no password)
-- You get **2 comparisons per day** (to manage API costs)
+- You need to **sign in** with your email and password — see [Signing in](#signing-in) if you don't have an account yet
+- You get **4 comparisons per day** (admins have no daily limit)
 
 ### How it works
 
@@ -156,7 +168,7 @@ Your preference is recorded as pairwise data — the same format used by researc
 
 ## Browsing the model registry
 
-Visit the **Models** page to explore all 41 models in the registry — 31 chat models and 10 embedding models.
+Visit the **Models** page to explore all 54 models in the registry — 44 chat models and 10 embedding models.
 
 ### Filtering
 
@@ -306,4 +318,4 @@ Bearing does not store your task descriptions or comparison prompts. What we sto
 - Your outcome feedback (if you give it)
 - Your comparison preferences (if you compare models)
 
-For sign-in, we store your email address. Nothing else about you.
+For sign-in, we store your email address and your password — never in plain text, only as a securely hashed value that can't be reversed back into your actual password. Nothing else about you.
