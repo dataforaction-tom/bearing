@@ -172,12 +172,13 @@ export function ResultsClient({ taskId, models, reasoning, pipeline, local }: Re
               </button>
             </div>
 
-            {/* Auto-route: run the user's real prompt (top model, Trio, or Challenger). */}
-            {isTop && (
-              <div className="mt-4 ml-9">
-                <RunSurface taskId={taskId} />
-              </div>
-            )}
+            {/* Run the user's real prompt on this specific model (Route,
+                Trio anchored here, or Challenger anchored here). Available
+                on every card, not just the top one, so a user can choose
+                any ranked model to actually run against. */}
+            <div className="mt-4 ml-9">
+              <RunSurface taskId={taskId} modelSlug={model.slug} modelName={model.name} />
+            </div>
           </div>
         )
       })}

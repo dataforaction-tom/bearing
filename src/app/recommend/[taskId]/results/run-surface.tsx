@@ -70,15 +70,22 @@ interface TrioResult {
 }
 
 const MODE_LABEL: Record<Mode, string> = {
-  route: 'Run top model',
+  route: 'Run this model',
   trio: 'Trio',
   challenger: 'Challenger',
 }
 
-const MODE_DESCRIPTION: Record<Mode, string> = {
-  route: 'Bearing routes to the highest-ranked model it can actually run for your task and priorities, and runs it for you.',
-  trio: 'Bearing sends your prompt to the top 3 ranked models, then a blind judge picks the best answer without knowing which model wrote which.',
-  challenger: 'Bearing routes to the top model, then has the #2 model critique and improve its answer. A blind judge picks the stronger result.',
+/** Anchor-relative copy — modelName is the specific card this surface is
+ *  attached to, not necessarily the task's overall #1 ranked model. */
+function modeDescription(mode: Mode, modelName: string): string {
+  switch (mode) {
+    case 'route':
+      return `Runs your prompt on ${modelName}.`
+    case 'trio':
+      return `Sends your prompt to ${modelName} and the next 2 runnable models by rank, then a blind judge picks the best answer without knowing which model wrote which.`
+    case 'challenger':
+      return `Has ${modelName} answer, then the next runnable model critique and improve it. A blind judge picks the stronger result.`
+  }
 }
 
 const MODE_PLACEHOLDER: Record<Mode, string> = {
@@ -87,7 +94,7 @@ const MODE_PLACEHOLDER: Record<Mode, string> = {
   challenger: 'Enter the prompt to route and challenge...',
 }
 
-export function RunSurface({ taskId }: { taskId: string }) {
+export function RunSurface({ taskId, modelSlug, modelName }: { taskId: string; modelSlug: string; modelName: string }) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<Mode>('route')
   const [prompt, setPrompt] = useState('')
@@ -130,6 +137,7 @@ export function RunSurface({ taskId }: { taskId: string }) {
       }
       const formData = new FormData()
       formData.set('prompt', prompt.trim())
+      formData.set('modelSlug', modelSlug)
       if (file) formData.set('file', file)
 
       if (mode === 'route') {
@@ -189,9 +197,9 @@ export function RunSurface({ taskId }: { taskId: string }) {
       </div>
 
       <p className="mb-2 font-display text-sm font-semibold text-navy">
-        {mode === 'route' ? 'Run your prompt' : MODE_LABEL[mode] + ' mode'}
+        {mode === 'route' ? `Run your prompt on ${modelName}` : MODE_LABEL[mode] + ' mode'}
       </p>
-      <p className="mb-3 text-xs text-grey-blue">{MODE_DESCRIPTION[mode]}</p>
+      <p className="mb-3 text-xs text-grey-blue">{modeDescription(mode, modelName)}</p>
 
       <textarea
         value={prompt}
@@ -275,7 +283,7 @@ export function RunSurface({ taskId }: { taskId: string }) {
         <div className="mt-4 fade-in">
           <div className="mb-2 inline-flex flex-wrap items-center gap-2 rounded-full bg-navy/5 px-3 py-1 text-xs text-navy/70">
             <span>
-              Routed to <strong className="text-navy">{routeResult.modelName}</strong> — ranked #1 among runnable models on your priorities
+              Ran on <strong className="text-navy">{routeResult.modelName}</strong>
               {' '}(strongest on {topFactor(routeResult.factorScores)})
             </span>
           </div>
@@ -308,7 +316,7 @@ export function RunSurface({ taskId }: { taskId: string }) {
           <div className={`grid gap-3 ${trioResult.candidates.length <= 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
             {trioResult.candidates.map((c) => {
               const isWinner = trioResult.verdict?.winnerSlug === c.slug
-              const roleLabel = c.role === 'primary' ? 'Top pick' : c.role === 'challenger' ? 'Challenger' : `#${c.routeRank}`
+              const roleLabel = c.role === 'primary' ? 'Selected' : c.role === 'challenger' ? 'Challenger' : `#${c.routeRank}`
               return (
                 <div
                   key={c.slug}
