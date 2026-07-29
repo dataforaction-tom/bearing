@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickRoute } from '../routing'
+import { pickRoute, pickRouteFrom } from '../routing'
 import type { ScoredModel } from '../scoring'
 
 function model(slug: string): ScoredModel {
@@ -57,5 +57,44 @@ describe('pickRoute', () => {
 
   it('returns empty for k<=0', () => {
     expect(pickRoute([model('a')], { k: 0, runnable: all })).toEqual([])
+  })
+})
+
+describe('pickRouteFrom', () => {
+  it('anchors on the first model (equivalent to pickRoute for k=1)', () => {
+    const route = pickRouteFrom([model('a'), model('b'), model('c')], 'a', { k: 1, runnable: all })
+    expect(route.map((m) => m.slug)).toEqual(['a'])
+  })
+
+  it('anchors on a middle-ranked model and takes the next k-1 runnable models after it', () => {
+    const route = pickRouteFrom([model('a'), model('b'), model('c'), model('d')], 'b', { k: 3, runnable: all })
+    expect(route.map((m) => m.slug)).toEqual(['b', 'c', 'd'])
+  })
+
+  it('anchors on the last model — fewer than k models follow it', () => {
+    const route = pickRouteFrom([model('a'), model('b'), model('c')], 'c', { k: 3, runnable: all })
+    expect(route.map((m) => m.slug)).toEqual(['c'])
+  })
+
+  it('skips non-runnable models after the anchor without reordering', () => {
+    const runnable = (slug: string) => slug !== 'c'
+    const route = pickRouteFrom([model('a'), model('b'), model('c'), model('d')], 'b', { k: 3, runnable })
+    expect(route.map((m) => m.slug)).toEqual(['b', 'd'])
+  })
+
+  it('returns empty when the anchor itself is not runnable', () => {
+    const runnable = (slug: string) => slug !== 'b'
+    const route = pickRouteFrom([model('a'), model('b'), model('c')], 'b', { k: 3, runnable })
+    expect(route).toEqual([])
+  })
+
+  it('returns empty when the anchor is not in the list', () => {
+    const route = pickRouteFrom([model('a'), model('b')], 'nonexistent', { k: 2, runnable: all })
+    expect(route).toEqual([])
+  })
+
+  it('returns empty for k<=0', () => {
+    const route = pickRouteFrom([model('a')], 'a', { k: 0, runnable: all })
+    expect(route).toEqual([])
   })
 })

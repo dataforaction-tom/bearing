@@ -48,7 +48,7 @@ import {
 import { hashPassword } from '@/lib/password'
 import { generateResetToken, consumeResetToken } from '@/lib/tokens'
 import { Resend } from 'resend'
-import { pickRoute } from '@/lib/routing'
+import { pickRoute, pickRouteFrom } from '@/lib/routing'
 import { judgeResponses, type JudgeCandidate } from '@/lib/judge'
 import { callModel, callDirectProvider, DIRECT_PROVIDERS } from '@/lib/openrouter'
 import { filterPrompt } from '@/lib/content-filter'
@@ -1119,9 +1119,20 @@ export async function routeAndRun(taskId: string, formData: FormData) {
     // the same gate runComparison applies. Prefetch ids so pickRoute stays sync.
     const orIds = await getOpenRouterIdsBySlug()
     const runnable = (slug: string) => orIds.has(slug) || Boolean(DIRECT_PROVIDERS[slug])
-    const route = pickRoute(ranked, { k: 1, runnable })
+
+    // A card can request a specific model to run against (any rank, not just
+    // #1) via the modelSlug field. Falls back to the top-ranked runnable
+    // model if omitted, for callers that don't specify one.
+    const anchorSlug = formData.get('modelSlug') as string | null
+    const route = anchorSlug
+      ? pickRouteFrom(ranked, anchorSlug, { k: 1, runnable })
+      : pickRoute(ranked, { k: 1, runnable })
     if (route.length === 0) {
-      return { error: 'No runnable model is available for this task.' }
+      return {
+        error: anchorSlug
+          ? "This model isn't available to run directly."
+          : 'No runnable model is available for this task.',
+      }
     }
     const top = route[0]
 
@@ -1221,9 +1232,20 @@ export async function runTrio(taskId: string, formData: FormData) {
 
     const orIds = await getOpenRouterIdsBySlug()
     const runnable = (slug: string) => orIds.has(slug) || Boolean(DIRECT_PROVIDERS[slug])
-    const route = pickRoute(ranked, { k: 3, runnable })
+
+    // Anchor on a specific card's model when requested — Trio then becomes
+    // that model + the next 2 runnable models by rank, instead of always the
+    // overall top 3.
+    const anchorSlug = formData.get('modelSlug') as string | null
+    const route = anchorSlug
+      ? pickRouteFrom(ranked, anchorSlug, { k: 3, runnable })
+      : pickRoute(ranked, { k: 3, runnable })
     if (route.length < 2) {
-      return { error: 'Not enough runnable models for a Trio on this task.' }
+      return {
+        error: anchorSlug
+          ? "Not enough runnable models after this one for a Trio."
+          : 'Not enough runnable models for a Trio on this task.',
+      }
     }
 
     // Optional file attachment (same handling as runComparison/routeAndRun).
@@ -1370,9 +1392,20 @@ export async function runChallenger(taskId: string, formData: FormData) {
 
     const orIds = await getOpenRouterIdsBySlug()
     const runnable = (slug: string) => orIds.has(slug) || Boolean(DIRECT_PROVIDERS[slug])
-    const route = pickRoute(ranked, { k: 2, runnable })
+
+    // Anchor on a specific card's model when requested — that model becomes
+    // primary, and the next runnable model by rank becomes the challenger,
+    // instead of always the overall top 2.
+    const anchorSlug = formData.get('modelSlug') as string | null
+    const route = anchorSlug
+      ? pickRouteFrom(ranked, anchorSlug, { k: 2, runnable })
+      : pickRoute(ranked, { k: 2, runnable })
     if (route.length < 2) {
-      return { error: 'Need at least two runnable models for a Challenger run.' }
+      return {
+        error: anchorSlug
+          ? "Not enough runnable models after this one for a Challenger run."
+          : 'Need at least two runnable models for a Challenger run.',
+      }
     }
     const [primary, challenger] = route
 

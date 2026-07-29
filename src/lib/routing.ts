@@ -28,3 +28,25 @@ export function pickRoute(scored: ScoredModel[], opts: PickRouteOptions): Scored
   const runnable = scored.filter((m) => opts.runnable(m.slug))
   return runnable.slice(0, opts.k)
 }
+
+/**
+ * Like `pickRoute`, but anchored on a specific model instead of always
+ * starting from the overall top rank — lets a user run/Trio/Challenger from
+ * any ranked card, not just #1. Returns the anchor plus however many runnable
+ * models follow it in rank order, capped at `k` total.
+ *
+ * Returns `[]` if the anchor itself isn't runnable (or isn't in `scored` at
+ * all) — the caller should treat that as "this model isn't available to run
+ * directly," the same way `pickRoute` returning `[]` means "nothing runnable."
+ */
+export function pickRouteFrom(
+  scored: ScoredModel[],
+  anchorSlug: string,
+  opts: PickRouteOptions,
+): ScoredModel[] {
+  if (opts.k <= 0) return []
+  const runnable = scored.filter((m) => opts.runnable(m.slug))
+  const anchorIndex = runnable.findIndex((m) => m.slug === anchorSlug)
+  if (anchorIndex === -1) return []
+  return runnable.slice(anchorIndex, anchorIndex + opts.k)
+}
