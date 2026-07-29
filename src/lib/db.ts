@@ -559,15 +559,18 @@ export async function createPasswordResetToken(
 
 /** Atomically consume a password-reset token: returns the associated user id
  *  if the token exists, hasn't been used, and hasn't expired — and marks it
- *  used in the same call so it can't be replayed. Returns null otherwise. */
+ *  used in the same statement so it can't be replayed. A single conditional
+ *  UPDATE ... RETURNING (rather than a SELECT followed by a separate UPDATE)
+ *  closes a TOCTOU window where two concurrent requests with the same valid
+ *  token could otherwise both pass the check before either marked it used. */
 export async function consumePasswordResetToken(tokenHash: string): Promise<string | null> {
   const rows = await getDb()`
-    SELECT id, user_id FROM password_reset_tokens
+    UPDATE password_reset_tokens
+    SET used_at = now()
     WHERE token_hash = ${tokenHash} AND used_at IS NULL AND expires_at > now()
+    RETURNING user_id
   `
-  if (rows.length === 0) return null
-  await getDb()`UPDATE password_reset_tokens SET used_at = now() WHERE id = ${rows[0].id}`
-  return rows[0].user_id as string
+  return rows.length > 0 ? (rows[0].user_id as string) : null
 }
 
 // ---------------------------------------------------------------------------

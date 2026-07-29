@@ -45,61 +45,69 @@ export function NavClient({ links, userEmail }: NavClientProps) {
   const pathname = usePathname()
 
   return (
-    <>
-      {/* Desktop links */}
-      <div className="hidden sm:flex items-center gap-6 text-sm font-medium">
-        {links.map(({ href, label, external }) =>
-          external ? (
-            <a
-              key={href}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-grey-blue-light"
-            >
-              {label}
-            </a>
-          ) : (
-            <Link
-              key={href}
-              href={href}
-              className={`transition-colors ${
-                pathname === href ? 'text-teal' : 'hover:text-grey-blue-light'
-              }`}
-            >
-              {label}
-            </Link>
-          ),
-        )}
-        <AuthLinks userEmail={userEmail} />
-      </div>
+    <header className="bg-navy text-cream border-b border-navy-light">
+      <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <Link href="/" className="font-display text-xl font-bold tracking-tight">
+          Bearing
+        </Link>
 
-      {/* Mobile hamburger button */}
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="sm:hidden flex flex-col gap-1.5 p-1"
-        aria-label={open ? 'Close menu' : 'Open menu'}
-        aria-expanded={open}
-      >
-        <span
-          className={`block h-0.5 w-5 bg-cream transition-transform ${
-            open ? 'translate-y-2 rotate-45' : ''
-          }`}
-        />
-        <span
-          className={`block h-0.5 w-5 bg-cream transition-opacity ${
-            open ? 'opacity-0' : ''
-          }`}
-        />
-        <span
-          className={`block h-0.5 w-5 bg-cream transition-transform ${
-            open ? '-translate-y-2 -rotate-45' : ''
-          }`}
-        />
-      </button>
+        {/* Desktop links */}
+        <div className="hidden sm:flex items-center gap-6 text-sm font-medium">
+          {links.map(({ href, label, external }) =>
+            external ? (
+              <a
+                key={href}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors hover:text-grey-blue-light"
+              >
+                {label}
+              </a>
+            ) : (
+              <Link
+                key={href}
+                href={href}
+                className={`transition-colors ${
+                  pathname === href ? 'text-teal' : 'hover:text-grey-blue-light'
+                }`}
+              >
+                {label}
+              </Link>
+            ),
+          )}
+          <AuthLinks userEmail={userEmail} />
+        </div>
 
-      {/* Mobile menu */}
+        {/* Mobile hamburger button */}
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="sm:hidden flex flex-col gap-1.5 p-1"
+          aria-label={open ? 'Close menu' : 'Open menu'}
+          aria-expanded={open}
+        >
+          <span
+            className={`block h-0.5 w-5 bg-cream transition-transform ${
+              open ? 'translate-y-2 rotate-45' : ''
+            }`}
+          />
+          <span
+            className={`block h-0.5 w-5 bg-cream transition-opacity ${
+              open ? 'opacity-0' : ''
+            }`}
+          />
+          <span
+            className={`block h-0.5 w-5 bg-cream transition-transform ${
+              open ? '-translate-y-2 -rotate-45' : ''
+            }`}
+          />
+        </button>
+      </nav>
+
+      {/* Mobile menu — a sibling of <nav>, not nested in its flex row, so it
+          spans full width below the header instead of squeezing in beside
+          the logo/hamburger. */}
       {open && (
         <div className="sm:hidden border-t border-navy-light px-6 pb-4 pt-2">
           <div className="flex flex-col gap-3 text-sm font-medium">
@@ -134,6 +142,6 @@ export function NavClient({ links, userEmail }: NavClientProps) {
           </div>
         </div>
       )}
-    </>
+    </header>
   )
 }
